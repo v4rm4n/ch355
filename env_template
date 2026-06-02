@@ -1,1 +1,2 @@
 REDIS_URL = redis://:SuperSecretRedis@localhost:6379
+POSTGRES_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ch355

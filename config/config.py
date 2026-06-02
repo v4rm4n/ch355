@@ -19,5 +19,8 @@ APICFG = {
 
 STORECFG = {
     "REDIS_URL": validators.storage.redis_url("REDIS_URL", "redis://localhost:6379/0"),
-    "POSTGRES_URL": validators.storage.postgres_url("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/ch355"),
+    "REDIS_MAX_CONNECTIONS": validators.storage.pool_size("REDIS_MAX_CONNECTIONS", 100),
+    "POSTGRES_URL": validators.storage.postgres_url("POSTGRES_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/ch355"),
+    "POSTGRES_POOL_SIZE": validators.storage.pool_size("POSTGRES_POOL_SIZE", 10),
+    "POSTGRES_MAX_OVERFLOW": validators.storage.max_overflow("POSTGRES_MAX_OVERFLOW", 20),
 }

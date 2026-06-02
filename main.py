@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from config import APPCFG, APICFG
 from services import configure_logging, ECHO
-from services import REDIS
+from services import REDIS, PG
 
 configure_logging(
     log_level = APICFG["UVICORN_LOG_LEVEL"],
@@ -19,6 +19,7 @@ configure_logging(
 async def lifespan(_app: FastAPI):
     try:
         await REDIS.connect()
+        await PG.connect()
     except RuntimeError:
         ECHO.error("Resource initialization failed")
         os._exit(1)
@@ -29,6 +30,7 @@ async def lifespan(_app: FastAPI):
     
     finally:
         await REDIS.close()
+        await PG.close()
 
 app = FastAPI(lifespan = lifespan)
 
@@ -36,6 +38,9 @@ app = FastAPI(lifespan = lifespan)
 async def root():
     ECHO.info("Root endpoint hit!")
     return f"ch355 API v{APPCFG["VERSION"]}"
+
+from api import main_router
+app.include_router(main_router)
 
 if __name__ == "__main__":
     uvicorn.run(

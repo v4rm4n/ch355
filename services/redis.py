@@ -15,7 +15,12 @@ class RedisManager:
 
     async def connect(self):
         try:
-            self.client = redis.from_url(STORECFG["REDIS_URL"])
+            self.client = redis.from_url(
+                STORECFG["REDIS_URL"],
+                protocol=2,
+                decode_responses=True,
+                max_connections=STORECFG["REDIS_MAX_CONNECTIONS"]
+                )
             await asyncio.wait_for(self.client.ping(), timeout=3.0)
             self.connected = True
             ECHO.info("Connected to Redis")

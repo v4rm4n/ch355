@@ -1,0 +1,23 @@
+# - ch355/config/config.py
+
+from dotenv import load_dotenv
+
+from . import validators
+
+load_dotenv()
+
+APPCFG = {
+    "VERSION": "0.1.0"
+}
+
+APICFG = {
+    "UVICORN_LOG_LEVEL": validators.uvicorn.log_level("UVICORN_LOG_LEVEL", "INFO"),
+    "UVICORN_HOST": validators.uvicorn.host("UVICORN_HOST", "0.0.0.0"),
+    "UVICORN_PORT": validators.uvicorn.port("UVICORN_PORT", 8000),
+    "UVICORN_RELOAD": validators.uvicorn.reload("UVICORN_RELOAD", False),
+}
+
+STORECFG = {
+    "REDIS_URL": validators.storage.redis_url("REDIS_URL", "redis://localhost:6379/0"),
+    "POSTGRES_URL": validators.storage.postgres_url("POSTGRES_URL", "postgresql://postgres:postgres@localhost:5432/ch355"),
+}

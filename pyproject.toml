@@ -1,0 +1,13 @@
+[project]
+name = "ch355"
+version = "0.1.0"
+description = "Game backend for multiplayer chess."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dotenv>=0.9.9",
+    "fastapi>=0.136.3",
+    "redis>=8.0.0",
+    "structlog>=25.5.0",
+    "uvicorn>=0.48.0",
+]

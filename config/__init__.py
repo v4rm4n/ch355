@@ -3,5 +3,6 @@
 from .config import (
     APPCFG,
     APICFG,
+    AUTHCFG,
     STORECFG,
 )

@@ -1,2 +1,4 @@
 REDIS_URL = redis://:SuperSecretRedis@localhost:6379
 POSTGRES_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ch355
+JWT_SECRET=your_super_secret_random_string_here
+#GOOGLE_CLIENT_ID=

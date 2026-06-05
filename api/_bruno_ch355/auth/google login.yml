@@ -1,0 +1,21 @@
+info:
+  name: google login
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: "{{base_url}}/api/auth/google"
+  body:
+    type: json
+    data: |-
+      {
+        "id_token": "dummy_test_string"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

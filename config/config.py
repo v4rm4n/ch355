@@ -1,5 +1,7 @@
 # - ch355/config/config.py
 
+import os
+
 from dotenv import load_dotenv
 
 from . import validators
@@ -8,6 +10,7 @@ load_dotenv()
 
 APPCFG = {
     "VERSION": "0.1.0"
+
 }
 
 APICFG = {
@@ -15,6 +18,13 @@ APICFG = {
     "UVICORN_HOST": validators.uvicorn.host("UVICORN_HOST", "0.0.0.0"),
     "UVICORN_PORT": validators.uvicorn.port("UVICORN_PORT", 8000),
     "UVICORN_RELOAD": validators.uvicorn.reload("UVICORN_RELOAD", False),
+}
+
+AUTHCFG = {
+    "GOOGLE_CLIENT_ID": os.getenv("GOOGLE_CLIENT_ID", "your-google-client-id"),
+    "JWT_SECRET": os.getenv("JWT_SECRET", "super-secret-key-change-in-prod"),
+    "JWT_ALGORITHM": "HS256",
+    "JWT_EXPIRE_MINUTES": 60 * 24 * 7,
 }
 
 STORECFG = {

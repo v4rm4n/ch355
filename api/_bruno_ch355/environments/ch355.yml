@@ -1,0 +1,4 @@
+name: ch355
+variables:
+  - name: base_url
+    value: http://localhost:8000

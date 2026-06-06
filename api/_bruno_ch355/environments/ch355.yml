@@ -2,3 +2,5 @@ name: ch355
 variables:
   - name: base_url
     value: http://localhost:8000
+  - name: auth_tok
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzgxMzQ0NDQ4fQ.YxuumPb4u3A5dps74EUE8y3x0VK7Ns4iVJWBmOqBGUc

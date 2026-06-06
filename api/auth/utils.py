@@ -29,6 +29,20 @@ def create_access_token(data: dict) -> str:
     
     return jwt.encode(to_encode, AUTHCFG["JWT_SECRET"], algorithm=AUTHCFG["JWT_ALGORITHM"])
 
+def create_refresh_token(data: dict) -> str:
+    """Mints a long-lived JWT for getting new access tokens."""
+    to_encode = data.copy()
+    
+    # Set expiration to 30 days
+    expire = datetime.now(timezone.utc) + timedelta(days=30)
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh"  # Explicitly mark this as a refresh token
+    })
+    
+    encoded_jwt = jwt.encode(to_encode, AUTHCFG["JWT_SECRET"], algorithm = AUTHCFG["JWT_ALGORITHM"])
+    return encoded_jwt
+
 def generate_petname() -> str:
     """Generates a random petname and appends a 4-digit sequence."""
     # generate(words=2, separator="-") creates something like "brave-falcon"

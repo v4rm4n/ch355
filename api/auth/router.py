@@ -1,6 +1,7 @@
 # - ch355/api/auth/router.py -
 
 import jwt
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
@@ -88,15 +89,17 @@ async def refresh_access_token(payload: schemas.RefreshRequest, db: AsyncSession
         if token_data.get("type") != "refresh":
             raise credentials_exception
             
-        user_id: str | None = token_data.get("sub")
-        if user_id is None:
+        user_id_str: str | None = token_data.get("sub")
+        if user_id_str is None:
             raise credentials_exception
             
+        user_id = uuid.UUID(user_id_str)
+
     except jwt.PyJWTError:
         raise credentials_exception
         
     # Check if the user still exists in the database (they weren't deleted/banned)
-    query = select(User).where(User.id == int(user_id))
+    query = select(User).where(User.id == user_id)
     result = await db.execute(query)
     user = result.scalar_one_or_none()
     
@@ -119,12 +122,16 @@ async def get_profile(current_user: User = Depends(get_current_user)):
     """
     return response(
         data={
-            "id": current_user.id,
+            "id": str(current_user.id),  # Cast UUID safely to string
             "email": current_user.email,
             "name": current_user.name,
             "elo_rating": current_user.elo_rating,
+            "conduct_score": current_user.conduct_score,
             "matches_played": current_user.matches_played,
-            "conduct_score": current_user.conduct_score
+            "matches_won": current_user.matches_won,    
+            "matches_lost": current_user.matches_lost,  
+            "matches_drawn": current_user.matches_drawn,
+            "resign_rate": current_user.resign_rate     
         },
         message="Profile fetched successfully."
     )

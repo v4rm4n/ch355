@@ -3,4 +3,4 @@ variables:
   - name: base_url
     value: http://localhost:8000
   - name: auth_tok
-    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzgxMzQ0NDQ4fQ.YxuumPb4u3A5dps74EUE8y3x0VK7Ns4iVJWBmOqBGUc
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNjkzMTU4Zi1lMmI2LTQ1MjItYjQ3NC0xYjc5YzZkZjg3ZjQiLCJleHAiOjE3ODEzNzIxODZ9.Cipq4RT_vGVgfjmJszfphfP2wrfEzmLcR1KYvorjlSY

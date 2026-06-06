@@ -1,9 +1,12 @@
 # - ch355/api/auth/utils.py -
 
+import jwt
+import petname
+import random
+
 from datetime import datetime, timedelta, timezone
 from google.oauth2 import id_token
 from google.auth.transport import requests
-import jwt
 
 from config import AUTHCFG
 
@@ -25,3 +28,11 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     
     return jwt.encode(to_encode, AUTHCFG["JWT_SECRET"], algorithm=AUTHCFG["JWT_ALGORITHM"])
+
+def generate_petname() -> str:
+    """Generates a random petname and appends a 4-digit sequence."""
+    # generate(words=2, separator="-") creates something like "brave-falcon"
+    base_name = petname.generate(2, "-")
+    num = random.randint(1000, 9999)
+    
+    return f"{base_name}-{num}"

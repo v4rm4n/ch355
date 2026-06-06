@@ -1,0 +1,26 @@
+info:
+  name: create match
+  type: http
+  seq: 4
+
+http:
+  method: POST
+  url: "{{base_url}}/api/match/create"
+  body:
+    type: json
+    data: |-
+      {
+        "play_as": "white",
+        "is_rated": true,
+        "is_private": false,
+        "time_control": "10+5"
+      }
+  auth:
+    type: bearer
+    token: "{{auth_tok}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

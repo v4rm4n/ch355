@@ -10,7 +10,7 @@ http:
     type: json
     data: |-
       {
-        "refresh_token" : ""
+        "refresh_token" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiZXhwIjoxNzgzMzMzMzM1LCJ0eXBlIjoicmVmcmVzaCJ9.PyuoOQqyLo5eCJ6WkLErziKt01tWGde6YJoTgyI7aZw"
       }
   auth: inherit
 

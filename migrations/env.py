@@ -12,7 +12,9 @@ from alembic import context
 
 from config import STORECFG
 from services.database import Base
+
 from api.auth.models import User
+from api.match.models import Match
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

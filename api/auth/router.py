@@ -2,13 +2,12 @@
 
 import jwt
 
-from typing import AsyncGenerator
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.utils import response
+from api.utils import response, get_db
 from config.config import AUTHCFG
 from services import PG
 
@@ -21,10 +20,6 @@ router = APIRouter(
     prefix="/auth",
     tags=["Authentication"]
 )
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    async with PG.get_session() as session:
-        yield session
 
 @router.post("/google")
 async def google_login(

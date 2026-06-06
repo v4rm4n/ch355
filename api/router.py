@@ -6,3 +6,6 @@ main_router = APIRouter(prefix="/api")
 
 from .auth import auth_router
 main_router.include_router(auth_router)
+
+from .match import match_router
+main_router.include_router(match_router)

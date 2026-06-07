@@ -4,6 +4,7 @@ import jwt
 import uuid
 import json
 
+from datetime import datetime, timezone
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,13 +14,12 @@ from services.logger import ECHO
 from api.utils import get_db
 from api.auth.models import User
 from api.match.models import Match, MatchStatus
+from api.match.utils import parse_time_control, format_pgn_clock, resolve_match_ratings
 from config.config import AUTHCFG
 
 from . import schemas
-
 from .manager import manager
 from .engine import process_move, get_turn_color
-
 
 
 router = APIRouter(
@@ -91,7 +91,7 @@ async def game_websocket(
         "name": user.name
     })
 
-    # 4. The Infinite Game Loop
+    # Game Loop
     try:
         while True:
             data = await websocket.receive_text()
@@ -108,16 +108,18 @@ async def game_websocket(
             # --- THE AUTHORITATIVE GAME LOGIC ---
             if event_type == schemas.WSEvent.MOVE:
                 uci_move = payload.get("uci")
-                
-                # 1. Fetch the absolute latest state from Postgres
+
+                # TYPE GUARD: Prevent None values from filtering down into the chess engine parameters
+                if not uci_move or not isinstance(uci_move, str):
+                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Invalid or missing UCI move attribute."}))
+                    continue
+
                 await db.refresh(match_record)
 
-                # 2. Prevent moves if the game is over
                 if match_record.status not in [MatchStatus.STARTING, MatchStatus.ACTIVE]:
                     await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Match is over."}))
                     continue
 
-                # 3. Enforce Turn Order
                 current_turn_color = get_turn_color(match_record.pgn_moves)
                 expected_id = match_record.white_player_id if current_turn_color == "white" else match_record.black_player_id
                 
@@ -125,37 +127,111 @@ async def game_websocket(
                     await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Not your turn!"}))
                     continue
 
-                # 4. Validate and Process the Move
-                is_legal, new_pgn, engine_status = process_move(match_record.pgn_moves, uci_move)
-                
+                # Initialize fallback tracking variables at parent scope so Pylance knows they are always bound
+                base_fallback = 0.0
+                increment_secs = 0.0
+
+                # Check if clocks should even tick
+                is_timed = match_record.time_control.lower() != "untimed"
+
+                # --- AUTHORITATIVE CLOCK MATH (ONLY IF TIMED) ---
+                if is_timed:
+                    now = datetime.now(timezone.utc)
+                    base_fallback, increment_secs = parse_time_control(match_record.time_control)
+                    
+                    white_time = match_record.white_time_left if match_record.white_time_left is not None else base_fallback
+                    black_time = match_record.black_time_left if match_record.black_time_left is not None else base_fallback
+                    
+                    if match_record.status == MatchStatus.ACTIVE and match_record.last_move_at is not None:
+                        elapsed_seconds = (now - match_record.last_move_at).total_seconds()
+                        
+                        if current_turn_color == "white":
+                            white_time -= elapsed_seconds
+                            match_record.white_time_left = white_time
+                            
+                            if white_time <= 0:
+                                match_record.status = MatchStatus.COMPLETED
+                                await resolve_match_ratings(match_record, match_record.black_player_id, False, db)
+                                await db.commit()
+                                await manager.broadcast_to_match(match_id_str, {
+                                    "event": schemas.WSEvent.GAME_OVER, 
+                                    "reason": "timeout", 
+                                    "winner_id": str(match_record.black_player_id),
+                                    "match_status": match_record.status.value
+                                })
+                                continue
+                            
+                            match_record.white_time_left = white_time + increment_secs
+                        else:
+                            black_time -= elapsed_seconds
+                            match_record.black_time_left = black_time
+                            
+                            if black_time <= 0:
+                                match_record.status = MatchStatus.COMPLETED
+                                await resolve_match_ratings(match_record, match_record.white_player_id, False, db)
+                                await db.commit()
+                                await manager.broadcast_to_match(match_id_str, {
+                                    "event": schemas.WSEvent.GAME_OVER, 
+                                    "reason": "timeout", 
+                                    "winner_id": str(match_record.white_player_id),
+                                    "match_status": match_record.status.value
+                                })
+                                continue
+                            
+                            match_record.black_time_left = black_time + increment_secs
+
+                    # Always track the last move checkpoint time for the next turn calculations
+                    match_record.last_move_at = now
+                else:
+                    # Clean up fields for untimed games so they show up as null in database records
+                    match_record.white_time_left = None
+                    match_record.black_time_left = None
+                    match_record.last_move_at = None
+                # -------------------------------------------------
+
+                # --- CALCULATE TIME ANNOTATION FOR THE COMPLETED MOVE ---
+                clk_annotation = None
+                if is_timed:
+                    # We look at the updated post-move values now calculated perfectly in the DB record
+                    active_clock_val = match_record.white_time_left if current_turn_color == "white" else match_record.black_time_left
+                    clock_to_format = active_clock_val if active_clock_val is not None else base_fallback
+                    clk_annotation = format_pgn_clock(clock_to_format)
+
+                # --- PROCESS MOVE & EMBED GENERATED CLOCK ATTACHMENT ---
+                is_legal, new_pgn, engine_status = process_move(
+                    match_record.pgn_moves, 
+                    uci_move, 
+                    clock_annotation=clk_annotation
+                )
+
                 if not is_legal:
                     await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": f"Illegal move: {uci_move}"}))
                     continue
 
-                # 5. Update Postgres
+                # Natively stores the clean history string built by python-chess
                 match_record.pgn_moves = new_pgn
-                
-                # Flip from STARTING to ACTIVE on the very first move
+
                 if match_record.status == MatchStatus.STARTING:
                     match_record.status = MatchStatus.ACTIVE
                     
-                # Handle Checkmates / Draws
                 if engine_status == "completed":
                     match_record.status = MatchStatus.COMPLETED
-                
+                    winner_id = match_record.white_player_id if current_turn_color == "white" else match_record.black_player_id
+                    w_change, b_change = await resolve_match_ratings(match_record, winner_id, False, db)
+                    payload["winner_id"] = str(winner_id)
+
                 await db.commit()
 
-                # 6. Append the official PGN to the payload so frontends can sync perfectly
-                payload["pgn"] = new_pgn
+                # Sync payload values directly down to client targets
+                payload["pgn"] = match_record.pgn_moves
                 payload["match_status"] = match_record.status.value
+                payload["white_time_left"] = match_record.white_time_left
+                payload["black_time_left"] = match_record.black_time_left
 
-            # Shoot it up to Redis to be broadcast to both players!
             await manager.broadcast_to_match(match_id_str, payload)
 
     except WebSocketDisconnect:
-        # 5. Handle Disconnections Elegantly
         manager.disconnect(websocket, match_id_str)
-        
         await manager.broadcast_to_match(match_id_str, {
             "event": schemas.WSEvent.PLAYER_DISCONNECTED,
             "user_id": str(user.id),

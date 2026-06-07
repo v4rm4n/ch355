@@ -4,49 +4,50 @@ import io
 import chess
 import chess.pgn
 
-def process_move(pgn_string: str, uci_move: str) -> tuple[bool, str, str]:
+def process_move(pgn_moves: str, uci_move: str, clock_annotation: str | None = None) -> tuple[bool, str, str]:
     """
-    Takes the current game history (PGN) and an incoming move (e.g., 'e2e4').
-    Returns: (is_legal, new_pgn_string, match_status)
+    Validates and applies a move. 
+    Attaches clock metadata directly to the move node so it is permanently preserved in the PGN history.
     """
-    # 1. Load the current game state
-    if not pgn_string:
+    # 1. Initialize board from existing PGN history
+    game = chess.pgn.read_game(io.StringIO(pgn_moves)) if pgn_moves else chess.pgn.Game()
+    if not game:
         game = chess.pgn.Game()
-    else:
-        pgn_io = io.StringIO(pgn_string)
-        game = chess.pgn.read_game(pgn_io)
-        if game is None:
-            game = chess.pgn.Game()
-
-    # Get the board state at the very end of the move history
-    board = game.end().board()
-
-    # 2. Parse the incoming move
+        
+    # 💡 FIXED: Use python-chess's native .end() method to hop straight to the last move node
+    node = game.end()
+    board = node.board()
+    
+    # 2. Parse and validate the new incoming move
     try:
         move = chess.Move.from_uci(uci_move)
-    except chess.InvalidMoveError:
-        return False, pgn_string, "invalid_format"
-
-    # 3. Validate the move
+    except ValueError:
+        return False, pgn_moves, "active"
+        
     if move not in board.legal_moves:
-        return False, pgn_string, "illegal_move"
-
-    # 4. Apply the move
-    game.end().add_variation(move)
-    board.push(move)
-
-    # 5. Determine the new game status
-    status = "active"
-    if board.is_checkmate():
+        return False, pgn_moves, "active"
+        
+    # 3. Apply the move to the game tree node
+    new_node = node.add_main_variation(move)
+    
+    # 💡 ATTACH THE CLOCK COMMENT DIRECTLY TO THE NODE
+    if clock_annotation:
+        new_node.comment = clock_annotation
+        
+    # 4. Determine engine completion status
+    next_board = new_node.board()
+    if next_board.is_game_over():
         status = "completed"
-    elif board.is_stalemate() or board.is_insufficient_material() or board.can_claim_draw():
-        status = "drawn" # You might need to add this to your MatchStatus Enum later!
-
-    # 6. Export the updated move list
-    exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=False)
-    new_pgn = str(game.accept(exporter))
-
-    return True, new_pgn, status
+    elif next_board.is_stalemate() or next_board.is_insufficient_material():
+        status = "drawn"
+    else:
+        status = "active"
+        
+    # 5. Export clean PGN string containing all historical comments intact
+    exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=True)
+    new_pgn = game.accept(exporter)
+    
+    return True, new_pgn.strip(), status
 
 def get_turn_color(pgn_string: str) -> str:
     """Returns 'white' or 'black' depending on whose turn it is."""

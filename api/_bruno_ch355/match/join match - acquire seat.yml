@@ -8,7 +8,7 @@ http:
   url: "{{base_url}}/api/match/:match_id/join"
   params:
     - name: match_id
-      value: 8242140c-33f5-466f-a18a-8c25d41dbfca
+      value: 9f47d70b-e468-44a7-b550-b7fac3f407e9
       type: path
   auth:
     type: bearer

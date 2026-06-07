@@ -16,7 +16,7 @@ from api.game.schemas import WSEvent
 
 from . import schemas
 from .models import Match, MatchStatus
-from .utils import resolve_match_ratings
+from .utils import resolve_match_ratings, parse_time_control
 
 router = APIRouter(
     prefix="/match",
@@ -37,10 +37,10 @@ async def create_match(
         )
 
     # GUARD 2: The "One Match Only" Rule
-    # Check if the user is already in a match that hasn't expired/finished
+    # Added MatchStatus.STARTING so users can't create lobbies mid-handshake
     existing_match_query = select(Match).where(
         ((Match.white_player_id == current_user.id) | (Match.black_player_id == current_user.id)) &
-        (Match.status.in_([MatchStatus.PENDING, MatchStatus.ACTIVE]))
+        (Match.status.in_([MatchStatus.PENDING, MatchStatus.STARTING, MatchStatus.ACTIVE]))
     )
 
     existing_match_result = await db.execute(existing_match_query)
@@ -48,7 +48,7 @@ async def create_match(
     if existing_match_result.scalars().first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You already have an active or pending match. Please finish or cancel it first."
+            detail="You already have an active, pending, or starting match. Please finish or cancel it first."
         )
 
     # 1. Determine who plays White and who plays Black
@@ -60,10 +60,7 @@ async def create_match(
     white_id = current_user.id if creator_color == "white" else None
     black_id = current_user.id if creator_color == "black" else None
 
-    # 2. Determine initial status
-    initial_status = "pending" if payload.opponent_id is None else "active"
-
-    # 3. Create the DB record (Status is ALWAYS pending until someone joins)
+    # 2. Create the DB record (Status is ALWAYS pending until someone joins)
     new_match = Match(
         white_player_id=white_id,
         black_player_id=black_id,
@@ -71,7 +68,6 @@ async def create_match(
         is_rated=payload.is_rated,
         is_private=payload.is_private,
         time_control=payload.time_control
-        # Note: If you add `invited_user_id` to your model later, you'd map payload.opponent_id here!
     )
 
     db.add(new_match)
@@ -246,6 +242,13 @@ async def join_match(
     # 3. Flip the state to STARTING to initiate the WebSocket handshake phase
     match_record.status = MatchStatus.STARTING
     
+    # --- INITIALIZE CLOCKS ---
+    base_secs, _ = parse_time_control(match_record.time_control)
+    match_record.white_time_left = base_secs
+    match_record.black_time_left = base_secs
+    match_record.last_move_at = None # Stays empty until White makes move 1
+    # -------------------------
+
     await db.commit()
     await db.refresh(match_record)
 

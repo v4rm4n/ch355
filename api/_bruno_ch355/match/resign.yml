@@ -5,10 +5,10 @@ info:
 
 http:
   method: POST
-  url: "{{base_url}}/api/match/:match_id/join"
+  url: "{{base_url}}/api/match/:match_id/resign"
   params:
     - name: match_id
-      value: 7034220c-f520-471a-8a11-23aa530e1156
+      value: 9f9cabfc-b662-40bd-a4d7-856660734afa
       type: path
   auth:
     type: bearer

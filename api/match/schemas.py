@@ -3,7 +3,8 @@
 import uuid
 
 from pydantic import BaseModel, Field
-from typing import Optional
+
+from .models import MatchStatus
 
 class MatchCreate(BaseModel):
     opponent_id: uuid.UUID | None = None
@@ -16,7 +17,7 @@ class MatchResponse(BaseModel):
     id: uuid.UUID
     white_player_id: uuid.UUID | None = None
     black_player_id: uuid.UUID | None = None
-    status: str
+    status: MatchStatus
     is_rated: bool
     is_private: bool
     time_control: str

@@ -13,7 +13,7 @@ from api.auth.models import User
 from api.auth.dependencies import get_current_user
 
 from . import schemas
-from .models import Match
+from .models import Match, MatchStatus
 
 router = APIRouter(
     prefix="/match",
@@ -37,7 +37,7 @@ async def create_match(
     # Check if the user is already in a match that hasn't expired/finished
     existing_match_query = select(Match).where(
         ((Match.white_player_id == current_user.id) | (Match.black_player_id == current_user.id)) &
-        (Match.status.in_(["pending", "active"]))
+        (Match.status.in_([MatchStatus.PENDING, MatchStatus.ACTIVE]))
     )
 
     existing_match_result = await db.execute(existing_match_query)
@@ -64,7 +64,7 @@ async def create_match(
     new_match = Match(
         white_player_id=white_id,
         black_player_id=black_id,
-        status="pending",
+        status=MatchStatus.PENDING,
         is_rated=payload.is_rated,
         is_private=payload.is_private,
         time_control=payload.time_control
@@ -101,10 +101,10 @@ async def list_open_matches(
     # Query for public, pending matches where the current user is NOT already a participant
     query = (
         select(Match)
-        .where(Match.status == "pending")
+        .where(Match.status == MatchStatus.PENDING)
         .where(Match.is_private == False)
-        .where(Match.white_player_id != current_user.id)
-        .where(Match.black_player_id != current_user.id)
+        .where((Match.white_player_id != current_user.id) | Match.white_player_id.is_(None))
+        .where((Match.black_player_id != current_user.id) | Match.black_player_id.is_(None))
         .order_by(Match.created_at.desc())
     )
     
@@ -164,7 +164,7 @@ async def delete_match(
         )
 
     # 3. Guard: Prevent deleting active or historical games
-    if match_record.status != "pending":
+    if match_record.status != MatchStatus.PENDING:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot delete a match that has already started or concluded."
@@ -178,4 +178,83 @@ async def delete_match(
     return response(
         data={"deleted_match_id": str(match_id)},  # <--- Fixed: Cast UUID safely to string
         message="Match successfully canceled and removed from lobby."
+    )
+
+@router.post("/{match_id}/join")
+async def join_match(
+    match_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Allows a user to join an open, pending match.
+    Flips the status to STARTING for the WebSocket handshake.
+    """
+    # GUARD 1: The "One Match Only" Rule for the Joiner
+    existing_match_query = select(Match).where(
+        ((Match.white_player_id == current_user.id) | (Match.black_player_id == current_user.id)) &
+        (Match.status.in_([MatchStatus.PENDING, MatchStatus.STARTING, MatchStatus.ACTIVE]))
+    )
+    existing_match_result = await db.execute(existing_match_query)
+    if existing_match_result.scalars().first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have an active or pending match. Please finish or cancel it first."
+        )
+
+    # 1. Fetch the target match
+    query = select(Match).where(Match.id == match_id)
+    result = await db.execute(query)
+    match_record = result.scalar_one_or_none()
+
+    # GUARD 2: Does the match exist?
+    if not match_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Match not found."
+        )
+
+    # GUARD 3: Is it still pending? (Handles race conditions if 5 people click Join)
+    if match_record.status != MatchStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Match is no longer available."
+        )
+
+    # GUARD 4: Prevent joining your own match
+    if match_record.white_player_id == current_user.id or match_record.black_player_id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="You cannot join a match you created."
+        )
+
+    # 2. Claim the empty seat
+    if match_record.white_player_id is None:
+        match_record.white_player_id = current_user.id
+    elif match_record.black_player_id is None:
+        match_record.black_player_id = current_user.id
+    else:
+        # Fallback (Should never trigger due to Guard 3, but safe to have)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Match is already full."
+        )
+
+    # 3. Flip the state to STARTING to initiate the WebSocket handshake phase
+    match_record.status = MatchStatus.STARTING
+    
+    await db.commit()
+    await db.refresh(match_record)
+
+    return response(
+        data=schemas.MatchResponse(
+            id=match_record.id,
+            white_player_id=match_record.white_player_id,
+            black_player_id=match_record.black_player_id,
+            status=match_record.status,
+            is_rated=match_record.is_rated,
+            is_private=match_record.is_private,
+            time_control=match_record.time_control
+        ).model_dump(),
+        message="Successfully joined the match. Proceeding to WebSocket handshake."
     )

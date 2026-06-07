@@ -1,0 +1,21 @@
+info:
+  name: join match - acquire seat
+  type: http
+  seq: 5
+
+http:
+  method: POST
+  url: "{{base_url}}/api/match/:match_id/join"
+  params:
+    - name: match_id
+      value: 2c59576d-a003-450f-bdb9-6d9f29559f37
+      type: path
+  auth:
+    type: bearer
+    token: "{{auth_tok2}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

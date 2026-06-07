@@ -25,6 +25,7 @@ AUTHCFG = {
     "JWT_SECRET": os.getenv("JWT_SECRET", "super-secret-key-change-in-prod"),
     "JWT_ALGORITHM": "HS256",
     "JWT_EXPIRE_MINUTES": 60 * 24 * 7,
+    "JWT_REFRESH_EXPIRE_MINUTES": 60 * 24 * 30,
 }
 
 STORECFG = {

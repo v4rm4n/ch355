@@ -1,0 +1,21 @@
+info:
+  name: delete match
+  type: http
+  seq: 2
+
+http:
+  method: DELETE
+  url: "{{base_url}}/api/match/:id"
+  params:
+    - name: id
+      value: 2c59576d-a003-450f-bdb9-6d9f29559f37
+      type: path
+  auth:
+    type: bearer
+    token: "{{auth_tok}}"
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

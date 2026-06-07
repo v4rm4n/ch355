@@ -1,8 +1,8 @@
-"""initial uuid schema
+"""add match status enum
 
-Revision ID: 9a3accdf4dd7
+Revision ID: b752a389d8f9
 Revises: 
-Create Date: 2026-06-06 23:02:44.610742
+Create Date: 2026-06-07 07:22:42.781373
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '9a3accdf4dd7'
+revision: str = 'b752a389d8f9'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -40,7 +40,7 @@ def upgrade() -> None:
     sa.Column('white_player_id', sa.UUID(), nullable=True),
     sa.Column('black_player_id', sa.UUID(), nullable=True),
     sa.Column('pgn_moves', sa.String(), nullable=False),
-    sa.Column('status', sa.String(length=20), nullable=False),
+    sa.Column('status', sa.Enum('PENDING', 'STARTING', 'ACTIVE', 'COMPLETED', 'CANCELED', name='matchstatus'), nullable=False),
     sa.Column('is_rated', sa.Boolean(), nullable=False),
     sa.Column('is_private', sa.Boolean(), nullable=False),
     sa.Column('time_control', sa.String(length=50), nullable=False),

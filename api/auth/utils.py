@@ -34,7 +34,7 @@ def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
     
     # Set expiration to 30 days
-    expire = datetime.now(timezone.utc) + timedelta(days=30)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=AUTHCFG["JWT_REFRESH_EXPIRE_MINUTES"])
     to_encode.update({
         "exp": expire,
         "type": "refresh"  # Explicitly mark this as a refresh token

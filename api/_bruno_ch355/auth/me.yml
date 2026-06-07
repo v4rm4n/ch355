@@ -8,7 +8,7 @@ http:
   url: "{{base_url}}/api/auth/me"
   auth:
     type: bearer
-    token: "{{auth_tok}}"
+    token: "{{auth_tok2}}"
 
 settings:
   encodeUrl: true

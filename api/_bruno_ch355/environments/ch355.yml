@@ -3,6 +3,10 @@ variables:
   - name: base_url
     value: http://localhost:8000
   - name: auth_tok
-    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NmU5MTliOS1hYzExLTQzZTctOGU5My1lYTc3MTEzMDBjMTciLCJleHAiOjE3ODE0MDQwODh9.yja5wnb62dbN5bF2F7lNj00FucAaN8nLgPwqyLEFPvI
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4NmU5MTliOS1hYzExLTQzZTctOGU5My1lYTc3MTEzMDBjMTciLCJleHAiOjE3ODE0MDY3MDQsInR5cGUiOiJhY2Nlc3MifQ.Cjgp3Q48YB9EbXrUJF8xKKeK_k2mLDOVPY_DqXBJ3xQ
   - name: auth_tok2
-    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNDNkN2NlMS1mMGQyLTQ2ZTUtYjE1MS02YWIzMmQ5NmMyOWMiLCJleHAiOjE3ODE0MDQxNTh9.pOeqCgVMJTvPb3tLZYIU0qGUArHYHijh1i5KTmepObc
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJiNDNkN2NlMS1mMGQyLTQ2ZTUtYjE1MS02YWIzMmQ5NmMyOWMiLCJleHAiOjE3ODE0MDY3MzksInR5cGUiOiJhY2Nlc3MifQ.C03olTTgYT3bGAG5c6d-opiDLEl1b6tGRxcK-UsSuBM
+  - name: game_ws
+    value: ws://localhost:8000/api/game/ws
+  - name: match_id
+    value: ""

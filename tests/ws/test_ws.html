@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CH355 WS Test</title>
+    <style>
+        body { font-family: monospace; background: #1e1e1e; color: #00ff00; padding: 20px; }
+        input { width: 80%; padding: 10px; margin-top: 10px; }
+        #logs { white-space: pre-wrap; margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <h2>CH355 Real-Time Engine Test</h2>
+    
+    <input id="matchId" type="text" value="7034220c-f520-471a-8a11-23aa530e1156" placeholder="Match UUID">
+    
+    <input id="token" type="text" placeholder="Paste JWT Bearer Token here">
+    
+    <button onclick="connect()">1. Connect</button>
+    <br>
+    
+    <input id="msg" type="text" placeholder='{"event": "chat", "message": "hello!"}'>
+    <button onclick="sendMsg()">2. Send JSON</button>
+
+    <div id="logs"></div>
+
+    <script>
+        let ws;
+        function log(msg) {
+            document.getElementById('logs').innerText += msg + '\n';
+        }
+
+        function connect() {
+            const matchId = document.getElementById('matchId').value;
+            const token = document.getElementById('token').value;
+            // Adjust port to 8000 (or whatever Uvicorn is running on)
+            ws = new WebSocket(`ws://localhost:8000/api/game/ws/${matchId}?token=${token}`);
+            
+            ws.onopen = () => log("🟢 Connected to backend!");
+            ws.onclose = () => log("🔴 Disconnected from backend.");
+            ws.onmessage = (e) => log("📩 Received: " + e.data);
+        }
+
+        function sendMsg() {
+            const payload = document.getElementById('msg').value;
+            ws.send(payload);
+            log("📤 Sent: " + payload);
+        }
+    </script>
+</body>
+</html>

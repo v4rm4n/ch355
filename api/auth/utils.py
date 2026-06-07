@@ -25,7 +25,10 @@ def create_access_token(data: dict) -> str:
     """Mints a new JWT for the ch355 game backend."""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=AUTHCFG["JWT_EXPIRE_MINUTES"])
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "type": "access",
+        })
     
     return jwt.encode(to_encode, AUTHCFG["JWT_SECRET"], algorithm=AUTHCFG["JWT_ALGORITHM"])
 

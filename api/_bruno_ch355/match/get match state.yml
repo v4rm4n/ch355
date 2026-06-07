@@ -8,7 +8,7 @@ http:
   url: "{{base_url}}/api/match/:match_id"
   params:
     - name: match_id
-      value: 9f9cabfc-b662-40bd-a4d7-856660734afa
+      value: 4e8868be-2de9-42d1-b059-211917f26037
       type: path
   auth:
     type: bearer

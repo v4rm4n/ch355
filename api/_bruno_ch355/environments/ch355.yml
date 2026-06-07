@@ -5,7 +5,7 @@ variables:
   - name: auth_tok
     value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMjViN2YxNy1hNjhhLTQxNDItYjMzMC01YzBhNTMyMTcxNDYiLCJleHAiOjE3ODE0MjIxODksInR5cGUiOiJhY2Nlc3MifQ.SePkuc8DKOCX3REEtHhO0cZCF0GNDRKbmnroxZyIhxU
   - name: auth_tok2
-    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI4YTkwMzViMC03ZGZkLTQ4NzEtYjZmOC02MGJjNTc0ZmMwOWMiLCJleHAiOjE3ODE0MjIyNDIsInR5cGUiOiJhY2Nlc3MifQ.jHqFOpo1GZO5oClYzSfT5v3EdOFp-RaJK9Znz-D3Ibg
+    value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI5ZWQyODRlNC1mMzk1LTQzZjgtOGY4Yi1kYzhkNmVmYTBjOGIiLCJleHAiOjE3ODE0NDU4MTksInR5cGUiOiJhY2Nlc3MifQ.q9THaqHMxf_Dnsb-CXJ22U1FCnXTXRZv7OBZBvNjrQ8
   - name: game_ws
     value: ws://localhost:8000/api/game/ws
   - name: match_id

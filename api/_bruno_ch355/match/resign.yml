@@ -8,7 +8,7 @@ http:
   url: "{{base_url}}/api/match/:match_id/resign"
   params:
     - name: match_id
-      value: 9f9cabfc-b662-40bd-a4d7-856660734afa
+      value: 15b24eac-81a6-4603-9a31-2278656e512f
       type: path
   auth:
     type: bearer

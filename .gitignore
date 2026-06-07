@@ -6,8 +6,8 @@ dist/
 wheels/
 *.egg-info
 
-# Virtual environments
+# Virtual environments & deps
 .venv
 
 # Sensitive files
-.env
+**/.env

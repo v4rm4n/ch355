@@ -95,46 +95,56 @@ async def game_websocket(
     try:
         while True:
             data = await websocket.receive_text()
+            ECHO.info(f"🟢 [WS INCOMING RAW] Match {match_id_str}: {data}")
             
             try:
                 payload = json.loads(data)
             except json.JSONDecodeError:
-                await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Invalid JSON"}))
+                await websocket.send_text(json.dumps({"event": "error", "message": "Invalid JSON"}))
                 continue
                 
             payload["sender_id"] = str(user.id)
             event_type = payload.get("event")
 
+            # Resolve the Enum to a string safely just in case
+            target_move_event = getattr(schemas.WSEvent.MOVE, "value", schemas.WSEvent.MOVE)
+            
+            ECHO.info(f"🔍 [WS CHECK] Payload Event: '{event_type}' | Target Event: '{target_move_event}'")
+
             # --- THE AUTHORITATIVE GAME LOGIC ---
-            if event_type == schemas.WSEvent.MOVE:
+            if str(event_type) == str(target_move_event) or str(event_type) == "move":
+                ECHO.info("⚡ [WS ACTION] Entered MOVE processing block!")
+                
                 uci_move = payload.get("uci")
 
-                # TYPE GUARD: Prevent None values from filtering down into the chess engine parameters
                 if not uci_move or not isinstance(uci_move, str):
-                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Invalid or missing UCI move attribute."}))
+                    await websocket.send_text(json.dumps({"event": "error", "message": "Invalid or missing UCI move attribute."}))
                     continue
 
                 await db.refresh(match_record)
 
                 if match_record.status not in [MatchStatus.STARTING, MatchStatus.ACTIVE]:
-                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Match is over."}))
+                    await websocket.send_text(json.dumps({"event": "error", "message": "Match is over."}))
                     continue
 
                 current_turn_color = get_turn_color(match_record.pgn_moves)
                 expected_id = match_record.white_player_id if current_turn_color == "white" else match_record.black_player_id
                 
+                ECHO.info(f"♟️ [TURN CHECK] Expected ID: {expected_id} | Sender ID: {user.id}")
+                
                 if str(expected_id) != str(user.id):
-                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Not your turn!"}))
+                    ECHO.warning("❌ [TURN REJECTED] Not the user's turn.")
+                    await websocket.send_text(json.dumps({"event": "error", "message": "Not your turn!"}))
                     continue
 
-                # Initialize fallback tracking variables at parent scope so Pylance knows they are always bound
+                # Initialize fallback tracking variables
                 base_fallback = 0.0
                 increment_secs = 0.0
 
-                # Check if clocks should even tick
+                # Check if clocks should tick
                 is_timed = match_record.time_control.lower() != "untimed"
 
-                # --- AUTHORITATIVE CLOCK MATH (ONLY IF TIMED) ---
+                # --- AUTHORITATIVE CLOCK MATH ---
                 if is_timed:
                     now = datetime.now(timezone.utc)
                     base_fallback, increment_secs = parse_time_control(match_record.time_control)
@@ -180,24 +190,20 @@ async def game_websocket(
                             
                             match_record.black_time_left = black_time + increment_secs
 
-                    # Always track the last move checkpoint time for the next turn calculations
                     match_record.last_move_at = now
                 else:
-                    # Clean up fields for untimed games so they show up as null in database records
                     match_record.white_time_left = None
                     match_record.black_time_left = None
                     match_record.last_move_at = None
-                # -------------------------------------------------
 
-                # --- CALCULATE TIME ANNOTATION FOR THE COMPLETED MOVE ---
+                # --- CALCULATE TIME ANNOTATION ---
                 clk_annotation = None
                 if is_timed:
-                    # We look at the updated post-move values now calculated perfectly in the DB record
                     active_clock_val = match_record.white_time_left if current_turn_color == "white" else match_record.black_time_left
                     clock_to_format = active_clock_val if active_clock_val is not None else base_fallback
                     clk_annotation = format_pgn_clock(clock_to_format)
 
-                # --- PROCESS MOVE & EMBED GENERATED CLOCK ATTACHMENT ---
+                # --- PROCESS MOVE ---
                 is_legal, new_pgn, engine_status = process_move(
                     match_record.pgn_moves, 
                     uci_move, 
@@ -205,10 +211,9 @@ async def game_websocket(
                 )
 
                 if not is_legal:
-                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": f"Illegal move: {uci_move}"}))
+                    await websocket.send_text(json.dumps({"event": "error", "message": f"Illegal move: {uci_move}"}))
                     continue
 
-                # Natively stores the clean history string built by python-chess
                 match_record.pgn_moves = new_pgn
 
                 if match_record.status == MatchStatus.STARTING:
@@ -222,13 +227,19 @@ async def game_websocket(
 
                 await db.commit()
 
-                # Sync payload values directly down to client targets
+                # Sync payload values
                 payload["pgn"] = match_record.pgn_moves
                 payload["match_status"] = match_record.status.value
                 payload["white_time_left"] = match_record.white_time_left
                 payload["black_time_left"] = match_record.black_time_left
 
-            await manager.broadcast_to_match(match_id_str, payload)
+                # --- THE CRITICAL FIX: BROADCAST INSIDE THE IF BLOCK ---
+                ECHO.info(f"🚀 [WS BROADCAST] Sending new state to Redis for match {match_id_str}")
+                await manager.broadcast_to_match(match_id_str, payload)
+
+            # --- THE CRITICAL FIX: ELSE ALIGNED WITH THE EVENT IF ---
+            else:
+                ECHO.warning(f"⚠️ [WS DROPPED] Unrecognized event type: {event_type}")
 
     except WebSocketDisconnect:
         manager.disconnect(websocket, match_id_str)

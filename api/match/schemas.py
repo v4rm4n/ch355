@@ -21,3 +21,4 @@ class MatchResponse(BaseModel):
     is_rated: bool
     is_private: bool
     time_control: str
+    pgn_moves: str | None = None

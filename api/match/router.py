@@ -258,3 +258,37 @@ async def join_match(
         ).model_dump(),
         message="Successfully joined the match. Proceeding to WebSocket handshake."
     )
+
+@router.get("/{match_id}")
+async def get_match_state(
+    match_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Fetches the current state of a match. 
+    Used by the frontend to load the board before opening the WebSocket.
+    """
+    query = select(Match).where(Match.id == match_id)
+    result = await db.execute(query)
+    match_record = result.scalar_one_or_none()
+
+    if not match_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Match not found."
+        )
+
+    return response(
+        data=schemas.MatchResponse(
+            id=match_record.id,
+            white_player_id=match_record.white_player_id,
+            black_player_id=match_record.black_player_id,
+            status=match_record.status,
+            is_rated=match_record.is_rated,
+            is_private=match_record.is_private,
+            time_control=match_record.time_control,
+            pgn_moves=match_record.pgn_moves
+        ).model_dump(),
+        message="Match state retrieved successfully."
+    )

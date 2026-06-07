@@ -3,17 +3,24 @@
 import jwt
 import uuid
 import json
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from services.logger import ECHO
 
 from api.utils import get_db
 from api.auth.models import User
 from api.match.models import Match, MatchStatus
 from config.config import AUTHCFG
 
+from . import schemas
+
 from .manager import manager
-from services.logger import ECHO
+from .engine import process_move, get_turn_color
+
+
 
 router = APIRouter(
     prefix="/game",
@@ -79,7 +86,7 @@ async def game_websocket(
     
     # Optional: Broadcast a system message that a player connected
     await manager.broadcast_to_match(match_id_str, {
-        "event": "player_connected",
+        "event": schemas.WSEvent.PLAYER_CONNECTED,
         "user_id": str(user.id),
         "name": user.name
     })
@@ -87,13 +94,61 @@ async def game_websocket(
     # 4. The Infinite Game Loop
     try:
         while True:
-            # Wait for the client to send a JSON message (e.g., {"event": "move", "uci": "e2e4"})
             data = await websocket.receive_text()
             
-            # Parse it to ensure it's valid JSON, then add the sender's ID
-            payload = json.loads(data)
+            try:
+                payload = json.loads(data)
+            except json.JSONDecodeError:
+                await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Invalid JSON"}))
+                continue
+                
             payload["sender_id"] = str(user.id)
-            
+            event_type = payload.get("event")
+
+            # --- THE AUTHORITATIVE GAME LOGIC ---
+            if event_type == schemas.WSEvent.MOVE:
+                uci_move = payload.get("uci")
+                
+                # 1. Fetch the absolute latest state from Postgres
+                await db.refresh(match_record)
+
+                # 2. Prevent moves if the game is over
+                if match_record.status not in [MatchStatus.STARTING, MatchStatus.ACTIVE]:
+                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Match is over."}))
+                    continue
+
+                # 3. Enforce Turn Order
+                current_turn_color = get_turn_color(match_record.pgn_moves)
+                expected_id = match_record.white_player_id if current_turn_color == "white" else match_record.black_player_id
+                
+                if str(expected_id) != str(user.id):
+                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": "Not your turn!"}))
+                    continue
+
+                # 4. Validate and Process the Move
+                is_legal, new_pgn, engine_status = process_move(match_record.pgn_moves, uci_move)
+                
+                if not is_legal:
+                    await websocket.send_text(json.dumps({"event": schemas.WSEvent.ERROR, "message": f"Illegal move: {uci_move}"}))
+                    continue
+
+                # 5. Update Postgres
+                match_record.pgn_moves = new_pgn
+                
+                # Flip from STARTING to ACTIVE on the very first move
+                if match_record.status == MatchStatus.STARTING:
+                    match_record.status = MatchStatus.ACTIVE
+                    
+                # Handle Checkmates / Draws
+                if engine_status == "completed":
+                    match_record.status = MatchStatus.COMPLETED
+                
+                await db.commit()
+
+                # 6. Append the official PGN to the payload so frontends can sync perfectly
+                payload["pgn"] = new_pgn
+                payload["match_status"] = match_record.status.value
+
             # Shoot it up to Redis to be broadcast to both players!
             await manager.broadcast_to_match(match_id_str, payload)
 
@@ -102,7 +157,7 @@ async def game_websocket(
         manager.disconnect(websocket, match_id_str)
         
         await manager.broadcast_to_match(match_id_str, {
-            "event": "player_disconnected",
+            "event": schemas.WSEvent.PLAYER_DISCONNECTED,
             "user_id": str(user.id),
             "name": user.name
         })

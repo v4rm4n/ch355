@@ -22,3 +22,6 @@ class MatchResponse(BaseModel):
     is_private: bool
     time_control: str
     pgn_moves: str | None = None
+    winner_id: uuid.UUID | None = None
+    white_rating_change: int | None = None
+    black_rating_change: int | None = None

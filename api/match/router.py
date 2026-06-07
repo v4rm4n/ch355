@@ -11,9 +11,12 @@ from api.utils import response
 from api.utils import get_db
 from api.auth.models import User
 from api.auth.dependencies import get_current_user
+from api.game.manager import manager
+from api.game.schemas import WSEvent
 
 from . import schemas
 from .models import Match, MatchStatus
+from .utils import resolve_match_ratings
 
 router = APIRouter(
     prefix="/match",
@@ -267,28 +270,137 @@ async def get_match_state(
 ):
     """
     Fetches the current state of a match. 
-    Used by the frontend to load the board before opening the WebSocket.
     """
     query = select(Match).where(Match.id == match_id)
     result = await db.execute(query)
     match_record = result.scalar_one_or_none()
 
     if not match_record:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Match not found."
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+
+    # Optimized: Spread internal model dictionary attributes securely through keyword arguments
+    return response(
+        data=schemas.MatchResponse(**match_record.__dict__).model_dump(),
+        message="Match state retrieved successfully."
+    )
+
+@router.post("/{match_id}/resign")
+async def resign_match(
+    match_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Allows a player to manually exit a match. 
+    If no moves have been played, the game is Aborted (Canceled) without Elo penalties.
+    If the game is live, it resolves as a standard loss with Elo point distribution.
+    """
+    query = select(Match).where(Match.id == match_id)
+    result = await db.execute(query)
+    match_record = result.scalar_one_or_none()
+
+    if not match_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+
+    if match_record.status not in [MatchStatus.STARTING, MatchStatus.ACTIVE]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot exit this match.")
+
+    # Verify the requester is a valid competitor
+    is_white = match_record.white_player_id == current_user.id
+    is_black = match_record.black_player_id == current_user.id
+    
+    if not (is_white or is_black):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized access.")
+
+    # --- CHESS ABORTION GUARD (MOVE 0) ---
+    is_abort = not match_record.pgn_moves or match_record.pgn_moves.strip() == ""
+
+    if is_abort:
+        # Move 0 exit: Transition to CANCELED, skip Elo payouts entirely
+        match_record.status = MatchStatus.CANCELED
+        
+        await db.commit()
+        await db.refresh(match_record)
+
+        # Notify active WebSockets that the game was safely aborted
+        await manager.broadcast_to_match(str(match_id), {
+            "event": WSEvent.GAME_OVER,
+            "reason": "aborted",
+            "actor_id": str(current_user.id),
+            "white_rating_change": 0,
+            "black_rating_change": 0,
+            "match_status": match_record.status.value
+        })
+
+        return response(
+            data=schemas.MatchResponse(**match_record.__dict__).model_dump(),
+            message="Match successfully aborted before starting. No Elo rating penalties applied."
         )
 
+    # --- STANDARD RESIGNATION LOGIC (MOVE 1+) ---
+    winner_id = match_record.black_player_id if is_white else match_record.white_player_id
+
+    # Compute and distribute Elo metrics safely
+    w_change, b_change = await resolve_match_ratings(match_record, winner_id, False, db)
+    match_record.status = MatchStatus.COMPLETED
+    
+    await db.commit()
+    await db.refresh(match_record)
+
+    await manager.broadcast_to_match(str(match_id), {
+        "event": WSEvent.GAME_OVER,
+        "reason": "resignation",
+        "loser_id": str(current_user.id),
+        "winner_id": str(winner_id),
+        "white_rating_change": w_change,
+        "black_rating_change": b_change,
+        "match_status": match_record.status.value
+    })
+
     return response(
-        data=schemas.MatchResponse(
-            id=match_record.id,
-            white_player_id=match_record.white_player_id,
-            black_player_id=match_record.black_player_id,
-            status=match_record.status,
-            is_rated=match_record.is_rated,
-            is_private=match_record.is_private,
-            time_control=match_record.time_control,
-            pgn_moves=match_record.pgn_moves
-        ).model_dump(),
-        message="Match state retrieved successfully."
+        data=schemas.MatchResponse(**match_record.__dict__).model_dump(),
+        message="Resignation processed successfully game over."
+    )
+
+
+@router.post("/{match_id}/draw")
+async def offer_or_accept_draw(
+    match_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Handles mutual agreement draws.
+    """
+    query = select(Match).where(Match.id == match_id)
+    result = await db.execute(query)
+    match_record = result.scalar_one_or_none()
+
+    if not match_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
+
+    if match_record.status != MatchStatus.ACTIVE:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Game is not active.")
+
+    if match_record.white_player_id != current_user.id and match_record.black_player_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized access.")
+
+    # Calculate points for draws
+    w_change, b_change = await resolve_match_ratings(match_record, None, True, db)
+    match_record.status = MatchStatus.COMPLETED
+    
+    await db.commit()
+    await db.refresh(match_record)
+
+    await manager.broadcast_to_match(str(match_id), {
+        "event": WSEvent.GAME_OVER,
+        "reason": "mutual_draw",
+        "white_rating_change": w_change,
+        "black_rating_change": b_change,
+        "match_status": match_record.status.value
+    })
+
+    return response(
+        data=schemas.MatchResponse(**match_record.__dict__).model_dump(),
+        message="Match concluded as a draw."
     )

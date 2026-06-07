@@ -1,18 +1,18 @@
 info:
-  name: get match state
+  name: resign
   type: http
-  seq: 6
+  seq: 7
 
 http:
-  method: GET
-  url: "{{base_url}}/api/match/:match_id"
+  method: POST
+  url: "{{base_url}}/api/match/:match_id/join"
   params:
     - name: match_id
-      value: 8242140c-33f5-466f-a18a-8c25d41dbfca
+      value: 7034220c-f520-471a-8a11-23aa530e1156
       type: path
   auth:
     type: bearer
-    token: "{{auth_tok}}"
+    token: "{{auth_tok2}}"
 
 settings:
   encodeUrl: true

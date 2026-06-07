@@ -5,7 +5,7 @@ import enum
 
 from datetime import datetime, timezone
 
-from sqlalchemy import String, ForeignKey, Boolean, DateTime, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, DateTime, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from services.database import Base
@@ -36,6 +36,10 @@ class Match(Base):
     is_rated: Mapped[bool] = mapped_column(Boolean, default=True)
     is_private: Mapped[bool] = mapped_column(Boolean, default=False)
     time_control: Mapped[str] = mapped_column(String(50), default="10+0") # "10+0", "blitz", "untimed"
+
+    winner_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
+    white_rating_change: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_rating_change: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)

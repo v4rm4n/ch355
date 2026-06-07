@@ -7,4 +7,5 @@ class WSEvent(str, enum.Enum):
     PLAYER_CONNECTED = "player_connected"
     PLAYER_DISCONNECTED = "player_disconnected"
     ERROR = "error"
+    GAME_OVER = "game_over"
 # ----------------------------------------------------
